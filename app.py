@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import shap
 import pickle
+import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -36,8 +37,9 @@ if st.checkbox("Show Missing Values"):
     st.write(df.isnull().sum())
 
 if st.checkbox("Show Correlation Matrix"):
-    st.write(sns.heatmap(df.corr(), annot=True))
-    st.pyplot()
+    fig, ax = plt.subplots()
+    sns.heatmap(df.corr(), annot=True, ax=ax)
+    st.pyplot(fig)
 
 # Features and Target
 target = st.sidebar.selectbox("Select Target Variable", df.columns, index=len(df.columns)-1)
@@ -45,6 +47,9 @@ features = st.sidebar.multiselect("Select Feature Variables", [col for col in df
 
 X = df[features]
 y = df[target]
+
+# Handle categorical variables
+X = pd.get_dummies(X)
 
 # Split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -75,30 +80,41 @@ st.write("MSE:", mean_squared_error(y_test, y_pred))
 
 # Save Model
 if st.button("Save Model"):
-    with open("saved_model.pkl", "wb") as f:
+    os.makedirs('models', exist_ok=True)
+    with open("models/saved_model.pkl", "wb") as f:
         pickle.dump(model, f)
-    st.success("Model Saved!")
+    st.success("Model Saved to models/ folder!")
 
 # Feature Importance + SHAP
-explainer = shap.Explainer(model, X_train)
+st.subheader("Feature Importance (SHAP)")
+
+# Select SHAP Explainer type
+if model_choice == "Random Forest":
+    explainer = shap.TreeExplainer(model)
+else:
+    explainer = shap.Explainer(model.predict, X_train)
+
 shap_values = explainer(X_train)
 
-st.subheader("Feature Importance (SHAP)")
-shap.summary_plot(shap_values, X_train)
-st.pyplot(bbox_inches='tight')
+fig_shap = plt.figure()
+shap.summary_plot(shap_values, X_train, show=False)
+st.pyplot(fig_shap)
 
 # SHAP Dependence Plot
-feature_dependence = st.selectbox("Select Feature for Dependence Plot", features)
-shap.dependence_plot(feature_dependence, shap_values.values, X_train)
-st.pyplot(bbox_inches='tight')
+feature_dependence = st.selectbox("Select Feature for Dependence Plot", X_train.columns)
+fig_dep = plt.figure()
+shap.dependence_plot(feature_dependence, shap_values.values, X_train, show=False)
+st.pyplot(fig_dep)
 
 # Manual Predict
 st.subheader("Predict Price Manually")
 manual_input = {}
 for feature in features:
-    manual_input[feature] = st.number_input(f"Input {feature}", value=float(X[feature].mean()))
+    manual_input[feature] = st.number_input(f"Input {feature}", value=float(df[feature].mean()))
 
 if st.button("Predict Price"):
     manual_df = pd.DataFrame([manual_input])
+    manual_df = pd.get_dummies(manual_df)
+    manual_df = manual_df.reindex(columns=X_train.columns, fill_value=0)  # Important!
     manual_pred = model.predict(manual_df)
     st.success(f"Predicted Price: {manual_pred[0]:,.2f}")
