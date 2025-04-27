@@ -42,17 +42,26 @@ if st.checkbox("Show Correlation Matrix"):
     st.pyplot(fig)
 
 # Features and Target
+# Features and Target
 target = st.sidebar.selectbox("Select Target Variable", df.columns, index=len(df.columns)-1)
 features = st.sidebar.multiselect("Select Feature Variables", [col for col in df.columns if col != target], default=[col for col in df.columns if col != target])
 
 X = df[features]
 y = df[target]
 
+# Convert target to numeric
+y = pd.to_numeric(y, errors='coerce')
+
+# Drop missing target
+X = X[~y.isna()]
+y = y.dropna()
+
 # Handle categorical variables
 X = pd.get_dummies(X)
 
 # Split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
 
 # Model Selection
 model_choice = st.sidebar.selectbox("Select Model", ["Linear Regression", "Ridge Regression", "Lasso Regression", "Random Forest"])
